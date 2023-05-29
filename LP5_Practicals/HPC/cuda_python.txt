@@ -1,0 +1,46 @@
+import numpy as np
+from numba import cuda
+
+# CUDA kernel for matrix multiplication
+@cuda.jit
+def matrix_multiply(a, b, c):
+    row, col = cuda.grid(2)
+    
+    if row < c.shape[0] and col < c.shape[1]:
+        sum = 0
+        for k in range(a.shape[1]):
+            sum += a[row, k] * b[k, col]
+        c[row, col] = sum
+
+# Matrix size
+N = 1024
+
+# Generate random input matrices
+a = np.random.randint(0, 10, (N, N)).astype(np.float32)
+b = np.random.randint(0, 10, (N, N)).astype(np.float32)
+
+# Allocate memory for the result matrix
+c = np.zeros((N, N), dtype=np.float32)
+
+# Allocate memory on the GPU
+d_a = cuda.to_device(a)
+d_b = cuda.to_device(b)
+d_c = cuda.device_array((N, N), dtype=np.float32)
+
+# Set up the grid and block dimensions
+threads_per_block = (16, 16)
+blocks_per_grid = ((N + threads_per_block[0] - 1) // threads_per_block[0],
+                   (N + threads_per_block[1] - 1) // threads_per_block[1])
+
+# Reset the CUDA context
+cuda.select_device(0)
+
+# Launch the kernel
+matrix_multiply[blocks_per_grid, threads_per_block](d_a, d_b, d_c)
+
+# Copy the result matrix from GPU to CPU
+c = d_c.copy_to_host()
+
+# Print the result matrix
+print("Result Matrix:")
+print(c)
